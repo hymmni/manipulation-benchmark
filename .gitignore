@@ -1,6 +1,10 @@
 __pycache__/
 *.py[cod]
 
+# data stores — large binary, not tracked (ADR-002)
+data_store/
+*.zarr
+
 # >>> harness gitignore (managed) >>>
 CLAUDE.md
 CLAUDE.harness.md

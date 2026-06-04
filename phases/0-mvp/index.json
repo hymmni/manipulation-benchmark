@@ -21,7 +21,10 @@
     {
       "step": 2,
       "name": "demo-collection",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-06-04T13:40:22+0900",
+      "completed_at": "2026-06-04T13:42:48+0900",
+      "summary": "data/spline.py(interpolate_waypoints→(n,3)float32,CubicSpline+np.unwrap), data/zarr_io.py(save_episode/load_episodes/num_episodes,schema:/states(T,3)float32,/actions(T,3)float32,/episode_ends(n_ep,)int64,append-safe), data/demo_collector.py(DemoCollector.build_trajectory+run(),GUI/logic separated), collect_demos.py(CLI entry), .gitignore(data_store/,*.zarr); 36 tests passed"
     },
     {
       "step": 3,
