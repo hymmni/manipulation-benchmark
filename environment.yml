@@ -6,11 +6,12 @@ dependencies:
   - python=3.10
   - pip
   - pip:
-      # CPU-only torch (local coding PC has no GPU). PyTorch CPU wheel index is the
-      # primary index so torch/torchvision resolve to +cpu builds; PyPI is the
-      # fallback for every other package.
-      - --index-url https://download.pytorch.org/whl/cpu
-      - --extra-index-url https://pypi.org/simple
+      # GPU-capable torch: PyPI ships CUDA-enabled wheels on Linux x86_64, so the
+      # GPU server uses CUDA automatically (utils.device.get_device → cuda→mps→cpu).
+      # CPU-only machines (e.g. the local coding PC) still work — get_device falls
+      # back to CPU at runtime; the CUDA libs simply go unused.
+      #   • Force a specific CUDA build:  --index-url https://download.pytorch.org/whl/cu124
+      #   • Force CPU-only (smaller):     --index-url https://download.pytorch.org/whl/cpu
       - torch
       - torchvision
       - diffusers

@@ -1,73 +1,102 @@
-# Harness Framework: Robot Behavior Intelligence
+# manipulation-benchmark
 
-이 저장소는 로봇 행동 지능(Diffusion Policy, Flow Matching 등) 연구를 위한 **드롭인(drop-in) 코드 하네스 템플릿**입니다. 작업할 베이스라인 레포지토리에 아래 하네스 파일들을 복사해 넣으면, 클로드와 함께 구조화된 워크플로우(탐색 → step 설계 → 자가 교정 실행)로 코드를 이식하고 실험할 수 있습니다.
+비효율적인 인간 데모로 출발한 2D 로봇이 **자가 성장(Self-Improvement) 루프**를 통해 스스로
+더 효율적인 지름길을 발견·학습하는지 검증하는 벤치마크 + 파이프라인 **MVP**.
 
-## 적용 방법
+**파이프라인:** `CVAE` → `Latent Trajectory Diffusion Planner` (goal-conditioned, CFG) →
+`Inverse Dynamics Action Diffusion` (추론 시 exploration noise로 탐색).
+**자가 성장 루프:** 탐색 롤아웃 → 효율 필터(지름길 채택) → self 버퍼 누적 → 파인튜닝.
 
-상황에 맞는 **한 줄**을 복사해 실행하면 클론부터 세팅까지 끝납니다.
+> 코드는 `feat/0-mvp` 브랜치에 있습니다. (원격 `main`은 별개 히스토리이므로 아래처럼 `-b feat/0-mvp`로 받으세요.)
 
-### ▶ 이미 코드가 있는 프로젝트에 적용 (adoption)
+---
 
-**적용할 프로젝트 레포 루트에서** 실행:
+## 1. 요구 사항
 
-```bash
-git clone https://github.com/hymmni/claude-harness-framework.git harness && python3 harness/install.py
-```
+- `conda` (miniconda/anaconda)
+- 학습/추론 PC: NVIDIA GPU + 최신 드라이버 (선택 — 없으면 자동 CPU fallback)
+- 디스플레이 없는 서버(headless)에서는 모든 실행 앞에 `SDL_VIDEODRIVER=dummy` 를 붙입니다.
 
-`harness/`로 클론한 뒤 `install.py`가 파일 복사(비파괴) → `.gitignore` 병합 → 디렉토리 생성 →
-클론 자가삭제까지 처리합니다. 기존 파일은 덮어쓰지 않으며, 기존 `CLAUDE.md`가 있으면 harness
-버전을 `CLAUDE.harness.md`로 남겨 수동 병합하게 합니다. (대상 경로 확인을 건너뛰려면 끝에 ` --yes`)
-
-### ▶ 빈 상태에서 새로 시작 (from scratch)
-
-프로젝트 이름(`my-project`)만 바꿔서, **아무 곳에서나** 실행:
+## 2. Clone
 
 ```bash
-git clone https://github.com/hymmni/claude-harness-framework.git my-project && cd my-project && rm -rf .git && git init && rm install.py
+git clone -b feat/0-mvp https://github.com/hymmni/manipulation-benchmark.git
+cd manipulation-benchmark
 ```
 
-템플릿을 프로젝트로 클론하고 git 이력만 새로 시작한 뒤 설치기를 제거합니다. 별도 세팅이 필요 없습니다.
+## 3. 환경 생성
 
-### 적용 후 구성
-
-```
-CLAUDE.md        # 프로젝트 규칙 및 로봇 연구 프로토콜
-.claude/         # 클로드 설정 및 커맨드 (harness, review)
-docs/            # 아키텍처 가이드 (ARCHITECTURE, ADR, ROBOT_GUIDE)
-scripts/         # 하네스 실행기 (execute.py, merge_to_main.py)
-experiment_records/     # 실험 결과 기록 (LOG_TEMPLATE 활용)
-references/      # 외부 오픈소스를 분석용으로 Clone (Read-only)
-.gitignore       # harness 산출물 제외 규칙
-```
-
-하네스 파일과 작업 코드는 동일한 레포지토리의 `.git` 이력으로 함께 관리됩니다. 워크플로우 실행 시 `phases/` 디렉토리가 생성되어 step 정의와 실행 기록을 담습니다.
-
-## 시작하기
-상세한 사용법 및 클로드와의 협업 워크플로우는 `docs/ROBOT_GUIDE.md`를 참고하십시오.
-
-## 스케줄러 (`scripts/scheduler.py`, `scripts/schedule_continuation.py`)
-
-원하는 시각에 Claude 세션을 자동 시작합니다. 학습 서버에 새벽 작업을 예약하거나 이어서 실행할 때 유용합니다.
-
-**세션 연속 예약 (권장) — 세션 한도에 근접했을 때:**
 ```bash
-python3 scripts/schedule_continuation.py          # 세션 ID·리셋 시각 자동 감지
-python3 scripts/schedule_continuation.py --reset-at 22:05  # 시각 직접 지정
+conda env create -f environment.yml
+conda activate trajectory-explore
 ```
-또는 Claude Code에서 `/schedule-continuation` 입력 — Claude가 중단 계획을 `continuation_plan.md`에 기록하고 예약까지 처리합니다.
 
-**임의 시각 예약 (`scripts/scheduler.py`):**
-```python
-# CONFIG 수정 후 실행
-TARGET_TIME     = "07:00"   # 실행 시각 (24시간제)
-SESSION_ID      = "abc123"  # 비워두면 새 세션
-MODEL           = "opus"    # sonnet | opus | haiku  (비워두면 CC 설정값)
-PERMISSION_MODE = "auto"    # auto | plan | acceptEdits | dontAsk  (비워두면 CC 설정값)
-PROMPT          = "작업 내용을 여기에..."
-```
+`torch`/`torchvision`은 PyPI의 CUDA 빌드로 설치되어 **GPU가 있으면 자동 사용**됩니다.
+드라이버가 오래되어 실패하면 `environment.yml`의 주석대로 `--index-url .../whl/cuXXX`(특정 CUDA)
+또는 `.../whl/cpu`(CPU 전용)로 바꿔 다시 생성하세요.
+
+## 4. GPU 인식 확인
+
 ```bash
-python3 scripts/scheduler.py
-python3 scripts/scheduler.py --time 07:00 --resume <session-id> --model opus --permission-mode auto --prompt "작업 내용"
+python -c "import torch; print('CUDA available:', torch.cuda.is_available()); \
+print('device:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU only')"
 ```
 
-스크립트를 켜둔 채로 두면 예약 시각에 자동 실행됩니다.
+## 5. 테스트 (스모크)
+
+```bash
+SDL_VIDEODRIVER=dummy python -m pytest -q          # 기대: 113 passed
+```
+
+## 6. 자가 성장 루프 실행
+
+```bash
+# (a) 빠른 검증 — 축소 config로 1 iteration, 합성 데모 자동 생성 (CPU에서 수 초)
+SDL_VIDEODRIVER=dummy python main.py --dry-run
+
+# (b) 실제 실행 — default config, GPU 자동 사용 (장시간)
+SDL_VIDEODRIVER=dummy python main.py
+```
+
+> `main.py`는 `cfg.train.device="auto"` → `cuda→mps→cpu` 순으로 디바이스를 고릅니다.
+> GPU 서버에서 `(b)`를 돌리면 CUDA가 자동으로 잡힙니다.
+
+## 7. (선택) 인간 데모 수집 GUI
+
+디스플레이가 있는 환경에서 마우스로 경유점을 클릭해 데모 궤적을 만듭니다(자동 spline 보간 → Zarr 저장).
+
+```bash
+python collect_demos.py            # headless 환경에서는 안내 후 종료됨
+```
+
+---
+
+## 프로젝트 구조
+
+```
+config/        # dataclass 설정 (Config/EnvConfig/ModelConfig/TrainConfig/BufferConfig)
+env/           # TrajectoryExploreEnv(gym) + SVG 맵 파서 + 충돌 판정 + PyGame 렌더
+models/        # CVAE / LatentTrajectoryDiffusion / InverseDynamicsDiffusion (diffusers DDPM)
+data/          # spline 보간 · Zarr IO · ReplayBuffer / SelfCollectedBuffer · 데모 수집기
+trainer/       # Trainer(pretrain/finetune/rollout/evaluate) + 효율 필터(지름길 판정)
+utils/         # device(cuda→mps→cpu fallback) 등
+tests/         # pytest (env / spline / models / config / device)
+main.py            # 자가 성장 온라인 루프 진입점 (--dry-run 지원)
+collect_demos.py   # 인간 데모 수집 GUI 진입점
+environment.yml    # conda 환경 (trajectory-explore)
+```
+
+## 환경/디바이스 메모
+
+- **디바이스 선택**: 모든 학습/추론은 `utils.device.get_device()`로 `cuda→mps→cpu` fallback.
+  코드에 `cuda` 하드코딩 없음 — GPU 없는 PC에서도 그대로 동작.
+- **맵 데이터**: env는 `references/image.svg`를 파싱하되, 파일이 없으면(예: 이 저장소 clone 시
+  `references/`는 미포함) 동일한 `FALLBACK_MAP`을 사용하므로 실행에 지장이 없습니다.
+- **데이터 저장**: 데모/self 버퍼는 `data_store/*.zarr`에 저장되며 git 추적에서 제외됩니다.
+
+## 알려진 후속 개선 (MVP 범위 밖)
+
+- CVAE 입력(원좌표 ~900)을 정규화하면 recon loss 스케일이 O(1)로 내려가 학습 품질이 개선됩니다.
+  (현재는 `logvar` 클램프로 NaN만 방지 — 동작/수치 안정성에는 문제 없음)
+- 파인튜닝 강화 경로: DPPO (역확산 체인을 MDP로 보는 policy-gradient 파인튜닝).
+- 생성 백본 교체: flow matching / shortcut model (`cfg.*.backbone`에 교체 지점 예약됨).
