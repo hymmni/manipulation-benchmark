@@ -1,0 +1,21 @@
+name: trajectory-explore
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - torch
+      - torchvision
+      - diffusers
+      - gymnasium
+      - pygame
+      - numpy
+      - scipy
+      - zarr
+      - einops
+      - matplotlib
+      - wandb
+      - tensorboard
+      - pytest
