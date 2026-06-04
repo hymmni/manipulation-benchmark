@@ -54,21 +54,28 @@ def shrink_for_dry_run(cfg: Config) -> Config:
     return cfg
 
 
-def _make_synthetic_demos(store_path: str, n_demos: int = 3, n_points: int = 10) -> None:
-    """Synthesize inefficient curved demos using spline interpolation."""
-    rng = np.random.default_rng(0)
+def _make_synthetic_demos(store_path: str, n_demos: int = 3, n_points: int = 10,
+                          seed: int = 0) -> None:
+    """Synthesize inefficient *detour* demos (the human-demo premise: go around the
+    central obstacle field, never straight through). Used by --dry-run and --seed-demos."""
+    rng = np.random.default_rng(seed)
     start = np.array([130.0, 300.0])
     goal_xy = np.array([800.0, 300.0])
 
     for i in range(n_demos):
-        # Detoured path — deliberately long so shortcuts can beat it
-        mid = (start + goal_xy) / 2 + np.array([0.0, rng.uniform(-120, 120)])
-        waypoints = np.stack([start, mid, goal_xy])
+        # Alternate up/down detours, deliberately long (baseline ~900-950 vs straight ~670)
+        # so a central shortcut clears the 20% efficiency margin. Stays within the 900x600 map.
+        sign = 1.0 if i % 2 == 0 else -1.0
+        offset = sign * rng.uniform(210.0, 250.0)
+        m1 = np.array([330.0, 300.0 + offset])
+        m2 = np.array([620.0, 300.0 + offset])
+        waypoints = np.stack([start, m1, m2, goal_xy])
         traj = interpolate_waypoints(waypoints, n_points=n_points)  # (n_points, 3)
 
-        # Synthetic actions: xy-displacement between consecutive states
+        # Synthetic actions: per-step displacement (normalised by action_scale) + yaw delta
         actions = np.zeros((n_points, 3), dtype=np.float32)
         actions[:-1, :2] = np.diff(traj[:, :2], axis=0) / 10.0  # normalise by action_scale
+        actions[:-1, 2] = np.diff(traj[:, 2], axis=0)
 
         path_len = float(np.sum(np.linalg.norm(np.diff(traj[:, :2], axis=0), axis=1)))
         meta = {
@@ -88,7 +95,7 @@ def _log(metrics: dict, iteration: int) -> None:
 
 # ── main loop ─────────────────────────────────────────────────────────────────
 
-def main(dry_run: bool = False) -> None:
+def main(dry_run: bool = False, seed_demos: int = 0) -> None:
     cfg = Config.default()
 
     tmp_dir = None
@@ -100,14 +107,14 @@ def main(dry_run: bool = False) -> None:
         print(f"[dry-run] temp store: {tmp_dir}")
 
     try:
-        _run(cfg, dry_run=dry_run)
+        _run(cfg, dry_run=dry_run, seed_demos=seed_demos)
     finally:
         if tmp_dir:
             import shutil
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def _run(cfg: Config, dry_run: bool) -> None:
+def _run(cfg: Config, dry_run: bool, seed_demos: int = 0) -> None:
     device = get_device("cpu" if dry_run else cfg.train.device)
     print(f"[loop] device={device}")
 
@@ -122,11 +129,29 @@ def _run(cfg: Config, dry_run: bool) -> None:
         n_pts = horizon + action_horizon + 2  # episodes long enough for at least one window
         _make_synthetic_demos(cfg.buffer.demo_path, n_demos=3, n_points=n_pts)
         print(f"[dry-run] synthesised 3 demo episodes ({n_pts} steps each)")
+    elif seed_demos > 0:
+        from data.zarr_io import num_episodes
+        existing = num_episodes(cfg.buffer.demo_path) if os.path.exists(cfg.buffer.demo_path) else 0
+        if existing > 0:
+            print(f"[seed] {cfg.buffer.demo_path} already holds {existing} demos — skipping seed "
+                  "(delete the store to reseed).")
+        else:
+            n_pts = max(horizon + action_horizon + 2, 96)  # plenty of windows; small per-step actions
+            _make_synthetic_demos(cfg.buffer.demo_path, n_demos=seed_demos, n_points=n_pts)
+            print(f"[seed] synthesised {seed_demos} inefficient detour demos "
+                  f"({n_pts} steps each) → {cfg.buffer.demo_path}")
 
     demo_buf = ReplayBuffer.from_zarr(cfg.buffer.demo_path, horizon, action_horizon)
     self_buf = SelfCollectedBuffer(cfg.buffer.self_path, horizon, action_horizon)
 
     print(f"[loop] demo_buf windows={len(demo_buf)}, self_buf windows={len(self_buf)}")
+
+    if len(demo_buf) == 0 and not dry_run:
+        print(
+            f"[loop] WARNING: no human demos at {cfg.buffer.demo_path}. Pretrain/baseline will be "
+            "empty and no shortcuts can be detected. Seed demos with "
+            "'python main.py --seed-demos 8' (synthetic) or collect via 'python collect_demos.py'."
+        )
 
     # ── models & optimisers ───────────────────────────────────────────────────
     trainer = Trainer(cfg, device)
@@ -196,5 +221,14 @@ if __name__ == "__main__":
         help="Run 1 iteration on CPU with tiny dims (no GPU, no wandb). "
              "Used to verify pipeline wiring before GPU training.",
     )
+    parser.add_argument(
+        "--seed-demos",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Synthesize N inefficient detour demos into the demo store before training "
+             "(skipped if the store already has demos). Use on a headless server with no "
+             "collected demos so pretrain/baseline are non-empty.",
+    )
     args = parser.parse_args()
-    main(dry_run=args.dry_run)
+    main(dry_run=args.dry_run, seed_demos=args.seed_demos)

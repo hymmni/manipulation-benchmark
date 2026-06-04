@@ -51,16 +51,26 @@ SDL_VIDEODRIVER=dummy python -m pytest -q          # 기대: 113 passed
 
 ## 6. 자가 성장 루프 실행
 
+실가동은 **비효율 인간 데모로 시작**하는 게 전제입니다. 데모가 없으면(`data_store/demos.zarr`
+부재) pretrain·baseline이 비고 지름길도 탐지되지 않습니다. headless 서버에서는 합성 데모를
+시드해 시작하세요.
+
 ```bash
 # (a) 빠른 검증 — 축소 config로 1 iteration, 합성 데모 자동 생성 (CPU에서 수 초)
 SDL_VIDEODRIVER=dummy python main.py --dry-run
 
-# (b) 실제 실행 — default config, GPU 자동 사용 (장시간)
+# (b) 시드 데모 주입 — 비효율 우회 데모 N개를 data_store/demos.zarr 에 생성
+#     (이미 데모가 있으면 건너뜀. 다시 시드하려면 data_store/demos.zarr 삭제)
+SDL_VIDEODRIVER=dummy python main.py --seed-demos 8
+
+# (c) 실제 실행 — default config, GPU 자동 사용 (장시간)
 SDL_VIDEODRIVER=dummy python main.py
 ```
 
-> `main.py`는 `cfg.train.device="auto"` → `cuda→mps→cpu` 순으로 디바이스를 고릅니다.
-> GPU 서버에서 `(b)`를 돌리면 CUDA가 자동으로 잡힙니다.
+> `--seed-demos N`은 시드만 따로 하는 게 아니라, 시드 후 곧바로 루프까지 이어서 돕니다.
+> 디스플레이가 있으면 합성 대신 `python collect_demos.py`로 진짜 사람 데모를 그려도 됩니다.
+> `main.py`는 `cfg.train.device="auto"` → `cuda→mps→cpu` 순으로 디바이스를 고르므로
+> GPU 서버에서는 CUDA가 자동으로 잡힙니다.
 
 ## 7. (선택) 인간 데모 수집 GUI
 

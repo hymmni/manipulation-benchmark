@@ -63,7 +63,7 @@ class TrainConfig:
 class BufferConfig:
     demo_path: str = "data_store/demos.zarr"
     self_path: str = "data_store/self_collected.zarr"
-    efficiency_margin: float = 0.8  # self-collected must be <=80% of demo length
+    efficiency_margin: float = 0.2  # shortcut accepted if cost < baseline*(1-margin), i.e. >=20% shorter
 
 
 @dataclass
