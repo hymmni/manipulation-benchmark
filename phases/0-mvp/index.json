@@ -37,7 +37,10 @@
     {
       "step": 4,
       "name": "selfimprove-loop",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-06-04T16:42:35+0900",
+      "completed_at": "2026-06-04T16:49:31+0900",
+      "summary": "data/replay_buffer.py(ReplayBuffer: episode-boundary-safe windowed sampler), data/self_collected_buffer.py(SelfCollectedBuffer), trainer/efficiency_filter.py(baseline_cost/is_efficient: success+cost+no-collision), trainer/trainer.py(Trainer: build_models/pretrain/finetune/rollout/evaluate), main.py(self-grow loop: rollout→filter→buffer→finetune→evaluate, --dry-run 1-iter CPU verified), tests/test_loop.py(12 smoke tests); 59 tests passed; 0-mvp complete"
     }
   ],
   "created_at": "2026-06-04T13:28:28+0900"
