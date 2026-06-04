@@ -6,12 +6,14 @@ dependencies:
   - python=3.10
   - pip
   - pip:
-      # GPU-capable torch: PyPI ships CUDA-enabled wheels on Linux x86_64, so the
-      # GPU server uses CUDA automatically (utils.device.get_device → cuda→mps→cpu).
-      # CPU-only machines (e.g. the local coding PC) still work — get_device falls
-      # back to CPU at runtime; the CUDA libs simply go unused.
-      #   • Force a specific CUDA build:  --index-url https://download.pytorch.org/whl/cu124
-      #   • Force CPU-only (smaller):     --index-url https://download.pytorch.org/whl/cpu
+      # GPU torch pinned to CUDA 13.0 (cu130) — the training server is an RTX 5090
+      # (Blackwell, sm_120) which needs a CUDA 12.8+ build. The cu130 wheel index is
+      # primary so torch/torchvision resolve to that build; PyPI is the fallback for
+      # everything else. get_device() (cuda→mps→cpu) uses the GPU automatically.
+      #   • CPU-only machine (e.g. the coding PC) still works, just downloads CUDA libs.
+      #     To slim it down, swap the index below to https://download.pytorch.org/whl/cpu
+      - --index-url https://download.pytorch.org/whl/cu130
+      - --extra-index-url https://pypi.org/simple
       - torch
       - torchvision
       - diffusers

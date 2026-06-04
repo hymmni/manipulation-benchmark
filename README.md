@@ -31,9 +31,10 @@ conda env create -f environment.yml
 conda activate trajectory-explore
 ```
 
-`torch`/`torchvision`은 PyPI의 CUDA 빌드로 설치되어 **GPU가 있으면 자동 사용**됩니다.
-드라이버가 오래되어 실패하면 `environment.yml`의 주석대로 `--index-url .../whl/cuXXX`(특정 CUDA)
-또는 `.../whl/cpu`(CPU 전용)로 바꿔 다시 생성하세요.
+`torch`/`torchvision`은 **CUDA 13.0(cu130) 빌드로 고정** 설치됩니다 — 학습 서버가 RTX 5090
+(Blackwell, sm_120)이라 CUDA 12.8+ 빌드가 필요하기 때문입니다. 드라이버가 CUDA 13.x면 그대로
+`get_device()`가 GPU를 자동으로 잡습니다. GPU 없는 PC도 동작하지만 CUDA 라이브러리를 받으니,
+가볍게 하려면 `environment.yml`의 `--index-url`을 `.../whl/cpu`로 바꾸세요.
 
 ## 4. GPU 인식 확인
 
