@@ -22,10 +22,15 @@ class CVAE(nn.Module):
         dec_in = cfg.latent_dim + cond_dim
         self.decoder = MLPResNet(dec_in, input_dim, hidden_dim=cfg.hidden_dim)
 
+    # Bound logvar so exp() cannot overflow to inf/NaN — robust even when inputs
+    # are unnormalized (raw env coordinates up to ~900). Standard VAE practice.
+    LOGVAR_MIN, LOGVAR_MAX = -10.0, 10.0
+
     def encode(self, x: Tensor, cond: Tensor | None = None) -> tuple[Tensor, Tensor]:
         inp = torch.cat([x, cond], dim=-1) if cond is not None else x
         h = self.encoder(inp)
-        return self.fc_mu(h), self.fc_logvar(h)
+        logvar = self.fc_logvar(h).clamp(self.LOGVAR_MIN, self.LOGVAR_MAX)
+        return self.fc_mu(h), logvar
 
     def reparameterize(self, mu: Tensor, logvar: Tensor) -> Tensor:
         std = torch.exp(0.5 * logvar)
