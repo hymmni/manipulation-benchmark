@@ -29,7 +29,10 @@
     {
       "step": 3,
       "name": "models",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-06-04T16:38:24+0900",
+      "completed_at": "2026-06-04T16:42:35+0900",
+      "summary": "models/nets.py(SinusoidalTimeEmbedding/MLPResNet/ConditionalDenoiser), models/base.py(BaseGenerativeModel+_build_scheduler DDPMScheduler/flow_matching예약), models/cvae.py(CVAE.encode/reparameterize/decode/forward/loss), models/latent_traj_diffusion.py(LatentTrajectoryDiffusion.sample(cond,num_samples,guidance_scale)→(ns,H,D)+CFG), models/inverse_dynamics.py(InverseDynamicsDiffusion.sample(cond,num_samples,exploration_noise)→(ns,AH,AD)+on-manifold탐색); 47 tests passed"
     },
     {
       "step": 4,
