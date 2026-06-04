@@ -13,7 +13,10 @@
     {
       "step": 1,
       "name": "env-2d",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-06-04T13:32:19+0900",
+      "completed_at": "2026-06-04T13:40:22+0900",
+      "summary": "TrajectoryExploreEnv(gymnasium.Env): obs=(5,)float32(x,y,yaw,goal_dx,goal_dy), action=(3,)float32(dx,dy,dyaw), info={is_success,path_len,collision}; env/svg_map.py(Polygon/Circle/Ellipse+load_map/FALLBACK_MAP), env/obstacles.py(ObstacleMap), render_mode=rgb_array→(600,900,3)uint8 headless-safe; 28 tests passed"
     },
     {
       "step": 2,
