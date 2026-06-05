@@ -7,6 +7,7 @@ from models.cvae import CVAE
 from models.latent_traj_diffusion import LatentTrajectoryDiffusion
 from models.inverse_dynamics import InverseDynamicsDiffusion
 from utils.device import get_device
+from utils.normalize import normalize_obs, normalize_state
 
 
 class Trainer:
@@ -59,33 +60,36 @@ class Trainer:
 
     # ── batch helpers ─────────────────────────────────────────────────────────
 
-    def _planner_batch(self, raw: dict) -> dict:
-        states = raw["states"].to(self.device)  # (B, H, 3)
-        first = states[:, 0, :]  # (B, 3)
+    def _obs_cond(self, first: torch.Tensor) -> torch.Tensor:
+        """Build normalized (state + goal-delta) conditioning from raw first states."""
         gx, gy = self.cfg.env.goal_center
         goal_dx = gx - first[:, 0:1]
         goal_dy = gy - first[:, 1:2]
-        cond = torch.cat([first, goal_dx, goal_dy], dim=-1)  # (B, 5)
-        return {"traj": states, "cond": cond}
+        cond_raw = torch.cat([first, goal_dx, goal_dy], dim=-1)  # (B, 5) raw
+        return normalize_obs(cond_raw, self.cfg.env.width, self.cfg.env.height)
+
+    def _planner_batch(self, raw: dict) -> dict:
+        states = raw["states"].to(self.device)  # (B, H, 3) raw
+        cond = self._obs_cond(states[:, 0, :])  # (B, 5) normalized
+        traj = normalize_state(states, self.cfg.env.width, self.cfg.env.height)  # diffusion target
+        return {"traj": traj, "cond": cond}
 
     def _idm_batch(self, raw: dict) -> dict:
-        states = raw["states"].to(self.device)   # (B, H, 3)
-        actions = raw["actions"].to(self.device)  # (B, AH, 3)
+        states = raw["states"].to(self.device)   # (B, H, 3) raw
+        actions = raw["actions"].to(self.device)  # (B, AH, 3) already ~[-1,1]
         ah = self.cfg.model.idm.action_horizon
-        s_t = states[:, 0, :]
-        s_t_ah = states[:, min(ah, states.shape[1] - 1), :]
-        cond = torch.cat([s_t, s_t_ah], dim=-1)  # (B, 6)
+        w, h = self.cfg.env.width, self.cfg.env.height
+        s_t = normalize_state(states[:, 0, :], w, h)
+        s_t_ah = normalize_state(states[:, min(ah, states.shape[1] - 1), :], w, h)
+        cond = torch.cat([s_t, s_t_ah], dim=-1)  # (B, 6) normalized
         return {"actions": actions, "cond": cond}
 
     def _cvae_batch(self, raw: dict) -> dict:
-        states = raw["states"].to(self.device)   # (B, H, 3)
+        states = raw["states"].to(self.device)   # (B, H, 3) raw
         B, H, D = states.shape
-        first = states[:, 0, :]
-        gx, gy = self.cfg.env.goal_center
-        goal_dx = gx - first[:, 0:1]
-        goal_dy = gy - first[:, 1:2]
-        cond = torch.cat([first, goal_dx, goal_dy], dim=-1)
-        x = states.reshape(B, H * D)
+        cond = self._obs_cond(states[:, 0, :])
+        states_n = normalize_state(states, self.cfg.env.width, self.cfg.env.height)
+        x = states_n.reshape(B, H * D)
         return {"x": x, "cond": cond}
 
     def _train_step(self, raw: dict) -> dict:
@@ -173,14 +177,17 @@ class Trainer:
             obs, _ = env.reset()
             state = obs[:3].copy()  # (x, y, yaw)
 
-            # Plan a goal-conditioned trajectory
-            cond_t = torch.tensor(obs, dtype=torch.float32, device=self.device).unsqueeze(0)
+            # Plan a goal-conditioned trajectory (cond normalized to match training).
+            # planner emits normalized states → used directly as IDM conditioning,
+            # which was also trained on normalized state pairs (consistent space).
+            obs_t = torch.tensor(obs, dtype=torch.float32, device=self.device).unsqueeze(0)
+            cond_t = normalize_obs(obs_t, self.cfg.env.width, self.cfg.env.height)
             with torch.no_grad():
                 planned = self.planner.sample(
                     cond_t,
                     num_samples=1,
                     guidance_scale=self.cfg.model.planner.guidance_scale,
-                )[0]  # (H, 3)
+                )[0]  # (H, 3) normalized
 
             all_states: list[np.ndarray] = [state]
             all_actions: list[np.ndarray] = []
