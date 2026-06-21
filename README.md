@@ -68,17 +68,22 @@ SDL_VIDEODRIVER=dummy python main.py
 ```
 
 > `--seed-demos N`은 시드만 따로 하는 게 아니라, 시드 후 곧바로 루프까지 이어서 돕니다.
-> 디스플레이가 있으면 합성 대신 `python collect_demos.py`로 진짜 사람 데모를 그려도 됩니다.
+> 디스플레이가 있으면 합성 대신 `python collect_demos.py`로 진짜 사람 데모를 모아도 됩니다.
 > `main.py`는 `cfg.train.device="auto"` → `cuda→mps→cpu` 순으로 디바이스를 고르므로
 > GPU 서버에서는 CUDA가 자동으로 잡힙니다.
 
-## 7. (선택) 인간 데모 수집 GUI
+## 7. (선택) 인간 데모 수집 — PushT식 마우스 teleop
 
-디스플레이가 있는 환경에서 마우스로 경유점을 클릭해 데모 궤적을 만듭니다(자동 spline 보간 → Zarr 저장).
+디스플레이가 있는 환경에서 마우스로 빨간 에이전트를 직접 끌고 다녀 데모를 모읍니다.
+실제 action이 기록되므로 IDM/Planner 학습에 그대로 쓰입니다.
 
 ```bash
-python collect_demos.py            # headless 환경에서는 안내 후 종료됨
+python collect_demos.py --demos 8            # headless 환경에서는 안내 후 종료됨
+python collect_demos.py --demos 8 --overwrite  # 기존 데모 지우고 새로 수집
 ```
+
+조작: 마우스를 움직이면 에이전트가 따라옴(yaw는 이동 방향으로 자동 정렬) | `R` 에피소드
+재시작 | `N` 즉시 저장 | `ESC`/창 닫기 종료.
 
 ---
 
@@ -88,12 +93,13 @@ python collect_demos.py            # headless 환경에서는 안내 후 종료�
 config/        # dataclass 설정 (Config/EnvConfig/ModelConfig/TrainConfig/BufferConfig)
 env/           # TrajectoryExploreEnv(gym) + SVG 맵 파서 + 충돌 판정 + PyGame 렌더
 models/        # CVAE / LatentTrajectoryDiffusion / InverseDynamicsDiffusion (diffusers DDPM)
-data/          # spline 보간 · Zarr IO · ReplayBuffer / SelfCollectedBuffer · 데모 수집기
+data/          # spline 보간(합성 데모용) · Zarr IO · ReplayBuffer / SelfCollectedBuffer
 trainer/       # Trainer(pretrain/finetune/rollout/evaluate) + 효율 필터(지름길 판정)
 utils/         # device(cuda→mps→cpu fallback) 등
 tests/         # pytest (env / spline / models / config / device)
 main.py            # 자가 성장 온라인 루프 진입점 (--dry-run 지원)
-collect_demos.py   # 인간 데모 수집 GUI 진입점
+collect_demos.py   # 인간 데모 수집 진입점 (PushT식 마우스 teleop)
+PROJECT_GUIDE.md   # 전체 구조/동작 흐름 상세 가이드
 environment.yml    # conda 환경 (trajectory-explore)
 ```
 
